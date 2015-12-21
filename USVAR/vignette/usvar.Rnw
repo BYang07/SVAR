@@ -1,0 +1,295 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+\usepackage{fullpage}
+\usepackage{float}
+\usepackage{graphicx}
+
+\title{USVAR: An Implementation of Under-identified SVAR Model}
+\author{Jay Raol \and Bin Yang}
+\date{\today}
+\begin{document}
+\maketitle
+
+\abstract{}
+
+\section{Introduction}
+
+\section{Mathematical Model}
+For a $m \times 1$ vector of variables, we can define the Structural VAR(SVAR) Model with $p$ lags, in its reduced form, as the following
+
+\begin{equation} \label{eq1}
+Y_t = \mathbf{B_1} Y_{t-1} + \mathbf{B_2} Y_{t-2} + \ldots + \mathbf{B_p} Y_{t-p} + u_t, \mathbf{E} [u_t u_t^{'}] = \mathbf{\Sigma} ,
+\end{equation}
+\\
+where $B_{k}$ are the coefficient matrices for $k = 1, \ldots, p$, and $u_t$ is the time $t$ error with covariance matrix $\mathbf{\Sigma}$. Structral shocks $\varepsilon_{t}$ to the reduced form error $u_t$ are often assumed to be related in the following way:
+
+\begin{equation}
+u_t = \mathbf{Z} \varepsilon_{t},  \mathbf{E} [\varepsilon_{t} \varepsilon_{t}^{'}] = \mathbf{I}_m,  \mathbf{Z}\mathbf{Z}^{'} = \mathbf{\Sigma}
+\end{equation}
+\\
+We define $\mathbf{Z}$ to be the short-run impact matrix. The SVAR model described in \ref{eq1} and use sign restrictions to determine those appropriate $\mathbf{Z}$s among infinitely many $\mathbf{Z}$s that satisfy the condition $\mathbf{Z} \mathbf{Z}^{'} = \mathbf{\Sigma}$.
+
+\section{Methods and Functions}
+  \subsection{Overview}
+  
+  \subsection{Impulse Responses}
+  
+  \subsection{Historical Decompositions of Model Errors}
+  
+\section{Example}
+\subsection{Data}
+In this section, we demonstrate the use of functions by estimating a model on the data set from Smets \& Wouters (2007), and we try to replicate the results in the first example given in Binning (2013). The author used variables including interest rate, GDP growth, CPI inflation, hours worked, and wage inflation. The author attempts to identify the following shocks: the monetary policy shock, the aggregate demand shock, the aggregate supply shock, the wage mark-up shock and a shock that is left unidentified. In particular, the author uses the following identification scheme:
+
+\begin{center}
+$f(\mathbf{Z},\mathbf{B})$ = \bordermatrix{
+~   & \varepsilon^{MP} & \varepsilon^{AD} & \varepsilon^{AS} & \varepsilon^{WM} & \varepsilon^{U} \cr
+i_0 & + & + & - & - & \times \cr
+\Delta log(Y_0) & - & + & + & + & \times \cr
+\pi_0 & - & + & - & - & \times \cr
+H_0 & \times & \times & \times & + & \times \cr
+\Delta log(W_0) & \times & \times & \times & - & \times \cr
+i_\infty & \times & \times & \times & \times & \times \cr
+\Delta log(Y_\infty) & 0 & 0 & \times & 0 & 0 \cr
+\pi_\infty & \times & \times & \times & \times & \times \cr
+H_\infty & \times & \times & \times & \times & \times \cr
+\Delta log(W_\infty) & \times & \times & \times & \times & \times \cr}
+\end{center}
+
+\subsection{Impulse Response}
+Given the estimated model from author that uses OLS with lag 2 which has the lowest BIC, we can obtain the impulse response by using the function \textit{usvar}. The following plot is an impulse response plot of all the variables against different shocks with $t_{0}$ at Jan 1996.
+
+\begin{figure}[H]
+\centering
+\includegraphics[scale=0.5]{IRF}
+\caption{Impulse Response Functions}
+\end{figure}
+<<echo=FALSE>>=
+options(width=60)
+@
+
+<<echo=FALSE>>=
+library(USVAR)
+# import data
+
+data <- read.csv("~/Desktop/Mixed/Internship/Invesco/Research Code/SVAR model/Smets_Wouters_data.csv", sep=";")
+data <- data[,-1]
+data <- data[74:nrow(data), c(1,4:ncol(data))]
+
+# set lags p
+p <- 2
+
+# Response variables data
+Y <- data[(p+1):nrow(data), ]
+
+X.mat <- xlags(data,p)
+
+# OLS
+
+n <- nrow(Y)
+k <- ncol(Y)
+
+Y.mat <- as.matrix(Y)
+
+X.mat <- cbind(matrix(1,nrow(X.mat)), X.mat)
+
+B <- solve(t(X.mat) %*% X.mat, t(X.mat) %*% Y.mat)
+
+u <- Y.mat - X.mat%*%B
+
+sigma <- t(u) %*% u / (n-k)
+
+p <- 2
+k <- 5
+f <- c(1,1,1,1,1,
+       1,1,1,1,1,
+       1,1,1,1,1,
+       1,1,1,1,1,
+       1,1,1,1,1,
+       1,1,1,1,1,
+       0,0,1,0,0,
+       1,1,1,1,1,
+       1,1,1,1,1,
+       1,1,1,1,1)
+f <- matrix(f, 10, 5, byrow=TRUE)
+
+sr <- c(1, 1, -1, -1, NA,
+        -1, 1, 1, 1, NA,
+        NA, NA, NA, 1, NA,
+        -1, 1, -1, -1, NA,
+        NA, NA, NA, -1, NA)
+sr <- matrix(sr, 5, 5, byrow=TRUE)
+
+C1 <- t(chol(sigma))
+@
+
+<<echo=FALSE,eval=FALSE,fig.width=5.5,fig.height=4.5,message=FALSE,fig.align='center',fig.show='asis',fig.cap='Impulse Response Functions', warning=FALSE, fig.pos='H'>>=
+t <- 500
+draws <- 500
+var_pos <- c(1,2,2,3,3)
+R <- usvar(p,k,f,sr,B,C1,t,draws,var_pos)
+
+fwd <- 20
+variable.name <- c('Interest.Rate','GDP.Growth','Working.Hours','CPI.Inflation','Wage.Inflation')
+shock.name <- c('Monetary.Policy','Aggregate.Demand','Aggregate.Supply','Wage.Mark-up','Unidentified')
+nos <- 5
+nov <- 5
+irf.fwd <- data.transform(nos, nov, R, fwd, variable.name, shock.name)
+irf.all <- data.transform(nos, nov, R, t, variable.name, shock.name)
+# develop the baseline case by minimizing the distance to median
+draw.name <- find.base.draw(irf.all)
+irf.fwd.money <- subset(irf.fwd, shock_name=='Monetary.Policy')
+library(ggplot2)
+# the first fwd lags of the baseline case
+base.irf.fwd.money <- subset(irf.fwd, variable==draw.name & shock_name=='Monetary.Policy')
+# refine names for plot
+irf.fwd.money$var_name <- gsub('.', ' ', irf.fwd.money$var_name, fixed=TRUE)
+base.irf.fwd.money$var_name <- gsub('.', ' ', base.irf.fwd.money$var_name, fixed=TRUE)
+# plot
+hp2 <- ggplot() +
+  geom_line(data=irf.fwd.money, aes(x=step, y=value, group=variable), color="grey") +
+  geom_line(data=base.irf.fwd.money, aes(x=step, y=value), color="black") +
+  ggtitle('Monetary Policy Shock') +
+  labs(x="Months", y="Impulse Response") +
+  scale_color_discrete(guide=FALSE)
+hp2 + facet_wrap( ~ var_name, scales="free")
+
+@
+
+\subsection{Historical Decompostions}
+<<echo=FALSE,eval=FALSE>>=
+setwd("/Users/apple/Desktop/Mixed/Internship/Invesco/Research Code/USVAR")
+source("svar_functions.R")
+library(plyr)
+library(ggplot2)
+library(expm)
+# import data
+treasury <- read.csv("10yr_treasury.csv", sep=";")
+sp500 <- read.csv("sp500.csv")
+names(treasury) <- c("date", "yield")
+names(sp500) <- c("date","price")
+# column name consistency
+treasury$date <- as.Date(treasury$date)
+sp500$date <- as.Date(sp500$date, format="%m/%d/%Y")
+# merge
+data <- merge(treasury,sp500, by="date")
+Date <- data[,1]
+# Response variables data
+data <- data[,-1]
+data <- na.omit(apply(data, 2, as.numeric))
+index <- as.numeric(attr(data,"na.action"))
+Date <- Date[-index]
+
+data[,2] <- log(data[,2])
+
+
+p <- 1
+
+Y <- data[(p+1):nrow(data), ]
+
+X.mat <- xlags(data,p)
+
+# OLS
+n <- nrow(Y)
+k <- ncol(Y)
+
+Y.mat <- as.matrix(Y)
+
+X.mat <- cbind(matrix(1,nrow(X.mat)), X.mat)
+
+
+# first row of B is the coefficients of the constant
+
+B <- solve(t(X.mat) %*% X.mat, t(X.mat) %*% Y.mat)
+
+u <- Y.mat - X.mat%*%B
+
+# covariance matrix
+sigma <- t(u) %*% u / (n-k)
+
+# zero and sign restriction schemes
+f <- c(1,1,
+       1,1,
+       1,1,
+       1,1)
+
+f <- matrix(f, k*2, k, byrow=TRUE)
+sr <- c(1, 1,
+        1, -1)
+sr <- matrix(sr, k, k, byrow=TRUE)
+
+# initial impact matrix
+C1 <- t(chol(sigma))
+# length forward
+t <- 500
+# number of draws
+draws <- 1000
+####temporary chpice, may need to change
+var_pos <- c(2,1)
+
+# solve for impulse responses
+R <- usvar(p,k,f,sr,B,C1,t,draws,var_pos)
+
+# input for historical decompositions
+fwd <- 100
+nov <- 2 # number of variable
+nos <- 2 # number of shocks
+var.name <- c("Bond Yield", "Equity Price") # dependent variable names
+shock.name <- c("News","Money")
+t.last <- nrow(u)
+
+# find the baseline case
+irf.all <- data.transform(nos, nov, R, t, var.name, shock.name)
+draw.name <- find.base.draw(irf.all)
+Z <- R[[draw.name]]$W.matrix
+
+# compute historical decompsitions
+contrib <- hist.decomp(Z,u,B,X.mat,nov,nos, t.last, var.name, shock.name)
+df.bond <- data.frame(Date = Date[-1][1:t.last], News = contrib[1,1,], Money = contrib[1,2,], Type = "Bond")
+df.equity <- data.frame(Date = Date[-1][1:t.last], News = contrib[2,1,], Money = contrib[2,2,], Type = "Equity")
+
+# Equity
+equity.pos <- df.equity
+equity.pos$News[df.equity$News < 0] <- 0
+equity.pos$Money[df.equity$Money < 0] <- 0
+
+equity.neg <- df.equity
+equity.neg$News[df.equity$News > 0] <- 0
+equity.neg$Money[df.equity$Money > 0] <- 0
+
+plot.equity.pos <- t(as.matrix(equity.pos[,2:3]))
+colnames(plot.equity.pos) <- as.character(equity.pos[,1])
+
+plot.equity.neg <- t(as.matrix(equity.neg[,2:3]))
+colnames(plot.equity.neg) <- as.character(equity.neg[,1])
+
+barplot(plot.equity.pos,col=c("dark blue","red"), border=NA, ylim=c(-0.8,0.3), main='Equity Price, Baseline')
+barplot(t(as.matrix(equity.neg[,2:3])),col=c("dark blue","red"), border=NA, add=TRUE)
+legend("bottomleft",legend=c("Money", "News"), fill=c("red", "dark blue"), bty="n")
+#total <- plot.equity.pos + plot.equity.neg
+#total <- apply(total, 2, sum)
+
+# Bond
+bond.pos <- df.bond
+bond.pos$News[df.bond$News < 0] <- 0
+bond.pos$Money[df.bond$Money < 0] <- 0
+
+bond.neg <- df.bond
+bond.neg$News[df.bond$News > 0] <- 0
+bond.neg$Money[df.bond$Money > 0] <- 0
+
+plot.bond.pos <- t(as.matrix(bond.pos[,2:3]))
+colnames(plot.bond.pos) <- as.character(bond.pos[,1])
+
+plot.bond.neg <- t(as.matrix(bond.neg[,2:3]))
+colnames(plot.bond.neg) <- as.character(bond.neg[,1])
+
+barplot(plot.bond.pos,col=c("dark blue","red"), border=NA, ylim=c(-2,2), main='Bond Price, Baseline')
+barplot(t(as.matrix(bond.neg[,2:3])),col=c("dark blue","red"), border=NA, add=TRUE)
+legend("bottomleft",legend=c("Money", "News"), fill=c("red", "dark blue"), bty="n")
+
+@
+\section{Conclusion}
+
+\bibliography{}
+
+\end{document}
